@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "migrate": "tsx src/db/migrate.ts",
-    "seed:users": "tsx src/db/seed_test_users.ts"
+    "seed:users": "tsx src/db/seed_test_users.ts",
+    "postinstall": "npm install --include=dev"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.38.5",
