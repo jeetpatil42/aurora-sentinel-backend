@@ -25,7 +25,6 @@ async function authenticateToken(req, res, next) {
             return;
         }
         const payload = (0, jwt_1.verifyAccessToken)(token);
-        // Verify user still exists
         const user = await (0, auth_1.getUserById)(payload.userId);
         if (!user) {
             res.status(401).json({ error: 'User not found' });

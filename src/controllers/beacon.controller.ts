@@ -1,4 +1,4 @@
-import { Response } from 'express';
+﻿import { Response } from 'express';
 import { BeaconRequest } from '../middlewares/beaconAuth';
 import { createSOSEvent, createRiskSnapshot, getSOSEventById, logSOSEvent } from '../services/sos';
 import { supabaseAdmin } from '../db/supabaseAdmin';
@@ -116,7 +116,7 @@ export const createBeaconSOS = async (req: BeaconRequest, res: Response): Promis
       beacon_name: beacon.name,
     };
 
-    const io = (req as any).io;
+    const io = req.io;
     if (io) {
       io.to('security_room').emit('new_sos_alert', eventWithContext);
       io.to('security_room').emit('sos:created', eventWithContext);
@@ -128,3 +128,5 @@ export const createBeaconSOS = async (req: BeaconRequest, res: Response): Promis
     res.status(400).json({ error: error?.message || 'Failed to create beacon SOS event' });
   }
 };
+
+

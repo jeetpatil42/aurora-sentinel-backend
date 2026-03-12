@@ -1,15 +1,10 @@
-import { Request, Response, NextFunction } from 'express';
+﻿import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken } from '../utils/jwt';
 import { getUserById } from '../services/auth';
+import type { AuthenticatedUser } from '../types/express';
 
 export interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-    role: string;
-    name?: string;
-    security_approved?: boolean;
-  };
+  user?: AuthenticatedUser;
 }
 
 export async function authenticateToken(
@@ -35,8 +30,7 @@ export async function authenticateToken(
     }
 
     const payload = verifyAccessToken(token);
-    
-    // Verify user still exists
+
     const user = await getUserById(payload.userId);
     if (!user) {
       res.status(401).json({ error: 'User not found' });
@@ -57,7 +51,7 @@ export async function authenticateToken(
     };
 
     next();
-  } catch (error) {
+  } catch (error: unknown) {
     res.status(403).json({ error: 'Invalid or expired token' });
   }
 }
@@ -77,3 +71,4 @@ export function requireRole(roles: string[]) {
     next();
   };
 }
+

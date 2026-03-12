@@ -61,11 +61,11 @@ app.use((0, cors_1.default)({
 app.use(express_1.default.json());
 app.use((0, cookie_parser_1.default)());
 app.use(express_1.default.static(resolvedUploadDir));
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
     req.io = io;
     next();
 });
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 app.use('/api/auth', auth_routes_1.default);
@@ -75,7 +75,7 @@ app.use('/api/presentation', presentation_routes_1.default);
 app.use('/api/risk-zones', risk_zones_routes_1.default);
 app.use('/api/analytics', analytics_routes_1.default);
 app.use('/api/admin', admin_routes_1.default);
-app.use((err, req, res, next) => {
+app.use((err, _req, res, _next) => {
     console.error(err.stack);
     res.status(500).json({ error: 'Something went wrong!' });
 });

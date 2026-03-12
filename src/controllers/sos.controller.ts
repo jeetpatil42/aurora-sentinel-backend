@@ -1,4 +1,4 @@
-import { Response } from 'express';
+﻿import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth';
 import { createSOSEvent, getSOSEvents, getSOSEventById, updateSOSStatus, clearAllSOSHistory, getSOSEventHistory, logSOSEvent } from '../services/sos';
 import { createRiskSnapshot } from '../services/sos';
@@ -85,7 +85,7 @@ export const createSOS = async (req: AuthRequest, res: Response): Promise<void> 
 
     const { risk_score, factors, location, trigger_type, attachments } = req.body;
 
-    console.log('📝 Creating SOS event for user:', req.user.id, 'risk_score:', risk_score);
+    console.log('ðŸ“ Creating SOS event for user:', req.user.id, 'risk_score:', risk_score);
 
     const event = await createSOSEvent({
       user_id: req.user.id,
@@ -97,12 +97,12 @@ export const createSOS = async (req: AuthRequest, res: Response): Promise<void> 
     });
 
     if (!event || !event.id) {
-      console.error('❌ SOS event creation returned invalid event:', event);
+      console.error('âŒ SOS event creation returned invalid event:', event);
       res.status(500).json({ error: 'Failed to create SOS event: Invalid response from database' });
       return;
     }
 
-    console.log('✅ SOS event created successfully:', event.id);
+    console.log('âœ… SOS event created successfully:', event.id);
 
     // Ensure chat thread exists for this SOS (non-blocking)
     try {
@@ -115,7 +115,7 @@ export const createSOS = async (req: AuthRequest, res: Response): Promise<void> 
       if (typeof msg === 'string' && /duplicate|unique/i.test(msg)) {
         // Ignore
       } else {
-        console.warn('⚠️ Failed to create sos_chats row (non-blocking):', msg);
+        console.warn('âš ï¸ Failed to create sos_chats row (non-blocking):', msg);
       }
     }
 
@@ -199,7 +199,7 @@ export const createSOS = async (req: AuthRequest, res: Response): Promise<void> 
     };
 
     // Emit real-time event (handled by socket handler)
-    const io = (req as any).io;
+    const io = req.io;
     if (io) {
       // Emit to security room
       io.to('security_room').emit('new_sos_alert', eventWithEmail);
@@ -208,14 +208,14 @@ export const createSOS = async (req: AuthRequest, res: Response): Promise<void> 
       if (req.user?.id) {
         io.to(`user_${req.user.id}`).emit('sos:created', eventWithEmail);
       }
-      console.log(`📡 Emitted SOS event to security_room and user_${req.user?.id}`);
+      console.log(`ðŸ“¡ Emitted SOS event to security_room and user_${req.user?.id}`);
     } else {
-      console.warn('⚠️ Socket.io not available - SOS event not broadcasted');
+      console.warn('âš ï¸ Socket.io not available - SOS event not broadcasted');
     }
 
     res.status(201).json(eventWithEmail);
   } catch (error: any) {
-    console.error('❌ Error creating SOS event:', error);
+    console.error('âŒ Error creating SOS event:', error);
     res.status(400).json({ error: error.message || 'Failed to create SOS event' });
   }
 };
@@ -430,7 +430,7 @@ export const sendSOSChatMessage = async (req: AuthRequest, res: Response): Promi
       sos_id: id,
     };
 
-    const io = (req as any).io;
+    const io = req.io;
     if (io) {
       io.to(`sos_chat_${id}`).emit('chat:message', payload);
     }
@@ -476,7 +476,7 @@ export const getSOS = async (req: AuthRequest, res: Response): Promise<void> => 
       filters.status = status;
     }
 
-    console.log('📋 Fetching SOS events with filters:', filters);
+    console.log('ðŸ“‹ Fetching SOS events with filters:', filters);
 
     const events = await getSOSEvents(filters);
 
@@ -532,12 +532,12 @@ export const getSOS = async (req: AuthRequest, res: Response): Promise<void> => 
       return;
     }
 
-    console.log(`✅ Retrieved ${events.length} SOS events`);
+    console.log(`âœ… Retrieved ${events.length} SOS events`);
 
     res.json(events);
   } catch (error: any) {
-    console.error('❌ Error in getSOS:', error);
-    console.error('❌ Error stack:', error.stack);
+    console.error('âŒ Error in getSOS:', error);
+    console.error('âŒ Error stack:', error.stack);
     res.status(500).json({ error: error.message || 'Failed to fetch SOS events' });
   }
 };
@@ -664,7 +664,7 @@ export const updateStatus = async (req: AuthRequest, res: Response): Promise<voi
     }, beaconMetaBySosId.get(event.id));
 
     // Emit status update (handled by socket handler)
-    const io = (req as any).io;
+    const io = req.io;
     if (io) {
       io.to('security_room').emit('sos-updated', eventWithEmail);
       io.to(`sos_${id}`).emit('sos-updated', eventWithEmail);
@@ -734,3 +734,5 @@ export const getSOSEventHistoryController = async (req: AuthRequest, res: Respon
     res.status(500).json({ error: error.message });
   }
 };
+
+

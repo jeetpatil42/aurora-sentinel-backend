@@ -1,9 +1,10 @@
-import { Request, Response } from 'express';
+﻿import { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { getUserById, comparePassword, hashPassword } from '../services/auth';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt';
 import { supabaseAdmin } from '../db/supabaseAdmin';
 import { supabase } from '../db/client';
+import { AuthRequest } from '../middlewares/auth';
 
 export const register = [
   body('email').isEmail().normalizeEmail(),
@@ -385,9 +386,9 @@ export const login = [
   },
 ];
 
-export const me = async (req: Request, res: Response): Promise<void> => {
+export const me = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = req.user?.id;
     if (!userId) {
       res.status(401).json({ error: 'Authentication required' });
       return;
@@ -413,3 +414,6 @@ export const me = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ error: error.message });
   }
 };
+
+
+

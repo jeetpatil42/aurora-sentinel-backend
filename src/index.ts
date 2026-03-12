@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
@@ -14,7 +14,6 @@ import analyticsRoutes from './routes/analytics.routes';
 import adminRoutes from './routes/admin.routes';
 import beaconRoutes from './routes/beacon.routes';
 import { setupSocketHandlers } from './sockets/handlers';
-import { AuthRequest } from './middlewares/auth';
 
 dotenv.config();
 
@@ -69,12 +68,12 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(resolvedUploadDir));
 
-app.use((req: AuthRequest, res, next) => {
-  (req as any).io = io;
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  req.io = io;
   next();
 });
 
-app.get('/health', (req, res) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
@@ -86,7 +85,7 @@ app.use('/api/risk-zones', riskZonesRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
 
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
 });
@@ -99,3 +98,4 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`CORS enabled for: ${allowedOrigins.join(', ')}`);
   console.log(`Uploads directory: ${resolvedUploadDir}`);
 });
+

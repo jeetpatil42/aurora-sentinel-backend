@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+﻿import { Request, Response, NextFunction } from 'express';
 import { touchBeacon, verifyBeaconDevice, BeaconDevice } from '../services/beacons';
 
 export interface BeaconRequest extends Request {
@@ -28,7 +28,8 @@ export async function authenticateBeacon(
     req.beacon = beacon;
     await touchBeacon(beacon.id);
     next();
-  } catch (error) {
+  } catch (error: unknown) {
     res.status(500).json({ error: 'Beacon authentication failed' });
   }
 }
+
