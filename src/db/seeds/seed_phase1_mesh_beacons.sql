@@ -83,7 +83,14 @@ mesh_nodes AS (
     'AA:BB:CC:DD:EE:02',
     'ESP32_BACKUP_1',
     'beacon.relay@aurora.local',
-    '{"address":"Security Hallway Relay"}'::jsonb
+    '{
+      "lat": 12.9718,
+      "lng": 77.5949,
+      "address": "Security Hallway Relay",
+      "building": "Security Block",
+      "floor": "Ground",
+      "room": "Relay Point"
+    }'::jsonb
   UNION ALL
   SELECT
     'ESP32_BACKUP_1',
@@ -93,7 +100,14 @@ mesh_nodes AS (
     'AA:BB:CC:DD:EE:03',
     'ESP32_GATEWAY_1',
     'beacon.backup@aurora.local',
-    '{"address":"Admin Block Backup Relay"}'::jsonb
+    '{
+      "lat": 12.9721,
+      "lng": 77.5953,
+      "address": "Admin Block Backup Relay",
+      "building": "Admin Block",
+      "floor": "Ground",
+      "room": "Backup Relay Point"
+    }'::jsonb
   UNION ALL
   SELECT
     'ESP32_GATEWAY_1',
@@ -103,7 +117,14 @@ mesh_nodes AS (
     'AA:BB:CC:DD:EE:04',
     NULL,
     'beacon.gateway@aurora.local',
-    '{"address":"Main Gate Gateway"}'::jsonb
+    '{
+      "lat": 12.9724,
+      "lng": 77.5958,
+      "address": "Main Gate Gateway",
+      "building": "Main Gate",
+      "floor": "Ground",
+      "room": "Gateway Booth"
+    }'::jsonb
 )
 INSERT INTO beacons (
   id,
