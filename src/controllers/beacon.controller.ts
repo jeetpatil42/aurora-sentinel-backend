@@ -1,7 +1,8 @@
-﻿import { Response } from 'express';
+import { Response } from 'express';
 import { BeaconRequest } from '../middlewares/beaconAuth';
 import { createSOSEvent, createRiskSnapshot, getSOSEventById, logSOSEvent } from '../services/sos';
 import { supabaseAdmin } from '../db/supabaseAdmin';
+import { BeaconDevice, getBeaconById } from '../services/beacons';
 
 async function resolveUserDisplayByUserId(userId: string): Promise<{ email?: string; name?: string }> {
   const { data: userRow } = await supabaseAdmin
@@ -17,15 +18,46 @@ async function resolveUserDisplayByUserId(userId: string): Promise<{ email?: str
   return {};
 }
 
+async function resolveSourceBeacon(
+  authenticatedBeacon: BeaconDevice,
+  requestedBeaconId: string
+): Promise<BeaconDevice | null> {
+  const normalizedRequestedBeaconId = String(requestedBeaconId || '').trim();
+  const authenticatedNodeRole = authenticatedBeacon.node_role || 'main';
+
+  if (!normalizedRequestedBeaconId || normalizedRequestedBeaconId === authenticatedBeacon.id) {
+    return authenticatedBeacon;
+  }
+
+  if (authenticatedNodeRole === 'main') {
+    return null;
+  }
+
+  const sourceBeacon = await getBeaconById(normalizedRequestedBeaconId);
+  if (!sourceBeacon || sourceBeacon.status !== 'active') {
+    return null;
+  }
+
+  return sourceBeacon;
+}
+
 export const createBeaconSOS = async (req: BeaconRequest, res: Response): Promise<void> => {
   try {
-    const beacon = req.beacon;
-    if (!beacon) {
+    const ingressBeacon = req.beacon;
+    if (!ingressBeacon) {
       res.status(401).json({ error: 'Beacon authentication required' });
       return;
     }
 
-    if (!beacon.assigned_user_id) {
+    const requestedBeaconId = String((req.body as any)?.beacon_id || '').trim();
+    const sourceBeacon = await resolveSourceBeacon(ingressBeacon, requestedBeaconId);
+
+    if (!sourceBeacon) {
+      res.status(400).json({ error: 'Invalid source beacon for forwarded SOS' });
+      return;
+    }
+
+    if (!sourceBeacon.assigned_user_id) {
       res.status(400).json({ error: 'Beacon is not assigned to a user' });
       return;
     }
@@ -36,18 +68,26 @@ export const createBeaconSOS = async (req: BeaconRequest, res: Response): Promis
     const batteryLevel = (req.body as any)?.battery_level;
     const rssi = (req.body as any)?.rssi;
     const firmwareVersion = (req.body as any)?.firmware_version;
+    const networkMeta = (req.body as any)?.network || {};
+    const ingressNodeRole = ingressBeacon.node_role || 'main';
 
-    const location = beacon.location || null;
+    const location = sourceBeacon.location || null;
     const beaconLocation = {
       ...(location || {}),
       source,
-      beacon_id: beacon.id,
-      beacon_name: beacon.name || 'Beacon',
+      beacon_id: sourceBeacon.id,
+      beacon_name: sourceBeacon.name || 'Beacon',
       beacon_triggered_at: pressedAt,
+      ingress_beacon_id: ingressBeacon.id,
+      ingress_beacon_name: ingressBeacon.name,
+      ingress_node_role: ingressNodeRole,
+      route: networkMeta.route,
+      hop_count: networkMeta.hop_count,
+      last_hop: networkMeta.last_hop,
     };
 
     const event = await createSOSEvent({
-      user_id: beacon.assigned_user_id,
+      user_id: sourceBeacon.assigned_user_id,
       risk_score: 100,
       factors: {
         audio: 0,
@@ -64,7 +104,7 @@ export const createBeaconSOS = async (req: BeaconRequest, res: Response): Promis
       .from('sos_chats')
       .insert({
         sos_id: event.id,
-        student_id: beacon.assigned_user_id,
+        student_id: sourceBeacon.assigned_user_id,
       });
 
     if (chatInsert.error && !/duplicate|unique/i.test(chatInsert.error.message || '')) {
@@ -73,7 +113,7 @@ export const createBeaconSOS = async (req: BeaconRequest, res: Response): Promis
 
     await createRiskSnapshot({
       event_id: event.id,
-      user_id: beacon.assigned_user_id,
+      user_id: sourceBeacon.assigned_user_id,
       audio: {},
       motion: {},
       time: { beacon_pressed_at: pressedAt },
@@ -88,8 +128,14 @@ export const createBeaconSOS = async (req: BeaconRequest, res: Response): Promis
       meta: {
         source,
         event_type: eventType,
-        beacon_id: beacon.id,
-        beacon_name: beacon.name,
+        beacon_id: sourceBeacon.id,
+        beacon_name: sourceBeacon.name,
+        ingress_beacon_id: ingressBeacon.id,
+        ingress_beacon_name: ingressBeacon.name,
+        ingress_node_role: ingressNodeRole,
+        route: networkMeta.route,
+        hop_count: networkMeta.hop_count,
+        last_hop: networkMeta.last_hop,
         firmware_version: firmwareVersion,
         battery_level: batteryLevel,
         rssi,
@@ -104,7 +150,7 @@ export const createBeaconSOS = async (req: BeaconRequest, res: Response): Promis
     }
 
     const display = await resolveUserDisplayByUserId(storedEvent.user_id);
-    const beaconLabel = beacon.name || 'Beacon';
+    const beaconLabel = sourceBeacon.name || 'Beacon';
     const eventWithContext = {
       ...storedEvent,
       email: beaconLabel,
@@ -112,8 +158,11 @@ export const createBeaconSOS = async (req: BeaconRequest, res: Response): Promis
       student_email: display.email,
       student_name: display.name,
       source,
-      beacon_id: beacon.id,
-      beacon_name: beacon.name,
+      beacon_id: sourceBeacon.id,
+      beacon_name: sourceBeacon.name,
+      ingress_beacon_id: ingressBeacon.id,
+      ingress_beacon_name: ingressBeacon.name,
+      ingress_node_role: ingressNodeRole,
     };
 
     const io = req.io;
@@ -128,5 +177,3 @@ export const createBeaconSOS = async (req: BeaconRequest, res: Response): Promis
     res.status(400).json({ error: error?.message || 'Failed to create beacon SOS event' });
   }
 };
-
-

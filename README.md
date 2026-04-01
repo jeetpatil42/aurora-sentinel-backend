@@ -19,6 +19,8 @@ cp .env.example .env
 - Use Supabase or PostgreSQL
 - Run the SQL schema from `src/db/schema.sql`
 - Run the beacon migration from `src/db/migrations/add_beacons.sql`
+- Run `src/db/migrations/add_beacon_network_metadata.sql`
+- Run `src/db/seeds/seed_phase1_mesh_beacons.sql` for the four-node phase-1 mesh
 
 4. Run migrations:
 ```bash
@@ -88,4 +90,4 @@ x-device-key: your-device-secret
 ```
 
 Before using the route, create a `beacons` row and store a bcrypt-hashed device key in `device_key_hash`. The beacon should also be assigned to a `users.id` value so the SOS event can be linked into the existing incident pipeline.
-"# aurora-sentinel-backend" 
+Forwarded mesh traffic is also supported: relay, backup, and gateway nodes can authenticate with their own headers while passing the original `beacon_id` in the JSON body, and the backend will attribute the SOS to that source beacon.

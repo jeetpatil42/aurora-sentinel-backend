@@ -14,6 +14,9 @@ export interface BeaconDevice {
     floor?: string;
     room?: string;
   } | null;
+  node_role: 'main' | 'relay' | 'backup' | 'gateway';
+  mac_address: string | null;
+  forward_target_id: string | null;
   status: 'active' | 'disabled';
   last_seen_at: string | null;
   created_at: string;
