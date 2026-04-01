@@ -2,7 +2,8 @@ import { Response } from 'express';
 import { BeaconRequest } from '../middlewares/beaconAuth';
 import { createSOSEvent, createRiskSnapshot, getSOSEventById, logSOSEvent } from '../services/sos';
 import { supabaseAdmin } from '../db/supabaseAdmin';
-import { BeaconDevice, getBeaconById } from '../services/beacons';
+import { BeaconDevice, getBeaconById, listBeaconStatuses, recordBeaconHeartbeat } from '../services/beacons';
+import { AuthRequest } from '../middlewares/auth';
 
 async function resolveUserDisplayByUserId(userId: string): Promise<{ email?: string; name?: string }> {
   const { data: userRow } = await supabaseAdmin
@@ -175,5 +176,51 @@ export const createBeaconSOS = async (req: BeaconRequest, res: Response): Promis
     res.status(201).json(eventWithContext);
   } catch (error: any) {
     res.status(400).json({ error: error?.message || 'Failed to create beacon SOS event' });
+  }
+};
+
+export const recordHeartbeat = async (req: BeaconRequest, res: Response): Promise<void> => {
+  try {
+    const beacon = req.beacon;
+    if (!beacon) {
+      res.status(401).json({ error: 'Beacon authentication required' });
+      return;
+    }
+
+    const heartbeat = await recordBeaconHeartbeat(beacon.id, {
+      wifi_connected: Boolean((req.body as any)?.wifi_connected),
+      mode: (req.body as any)?.mode,
+      temperature_c: typeof (req.body as any)?.temperature_c === 'number' ? (req.body as any).temperature_c : null,
+      smoke_level: typeof (req.body as any)?.smoke_level === 'number' ? (req.body as any).smoke_level : null,
+    });
+
+    if (!heartbeat) {
+      res.status(400).json({ error: 'Failed to record beacon heartbeat' });
+      return;
+    }
+
+    const io = req.io;
+    if (io) {
+      io.to('security_room').emit('beacon:heartbeat', heartbeat);
+      io.to('security_room').emit('beacon:status', heartbeat);
+    }
+
+    res.status(200).json(heartbeat);
+  } catch (error: any) {
+    res.status(400).json({ error: error?.message || 'Failed to record beacon heartbeat' });
+  }
+};
+
+export const getBeaconStatuses = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user || req.user.role !== 'security') {
+      res.status(403).json({ error: 'Insufficient permissions' });
+      return;
+    }
+
+    const statuses = await listBeaconStatuses();
+    res.status(200).json(statuses);
+  } catch (error: any) {
+    res.status(500).json({ error: error?.message || 'Failed to load beacon statuses' });
   }
 };
