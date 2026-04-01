@@ -63,7 +63,7 @@ mesh_nodes AS (
     'Aurora Main Beacon'::text AS name,
     '$2b$10$LlSc/VBmR0SPwH/oeFkq2ejdEaRu8eJRWq9xngonwqfvtBAZgO.di'::text AS device_key_hash,
     'main'::text AS node_role,
-    'AA:BB:CC:DD:EE:01'::text AS mac_address,
+    '1C:C3:AB:B3:88:64'::text AS mac_address,
     'ESP32_RELAY_1'::text AS forward_target_id,
     'beacon.main@aurora.local'::text AS owner_email,
     '{
@@ -80,7 +80,7 @@ mesh_nodes AS (
     'Aurora Relay Node',
     '$2b$10$LlSc/VBmR0SPwH/oeFkq2ejdEaRu8eJRWq9xngonwqfvtBAZgO.di',
     'relay',
-    'AA:BB:CC:DD:EE:02',
+    '00:70:07:E1:AE:84',
     'ESP32_BACKUP_1',
     'beacon.relay@aurora.local',
     '{
@@ -97,7 +97,7 @@ mesh_nodes AS (
     'Aurora Backup Node',
     '$2b$10$LlSc/VBmR0SPwH/oeFkq2ejdEaRu8eJRWq9xngonwqfvtBAZgO.di',
     'backup',
-    'AA:BB:CC:DD:EE:03',
+    '28:05:A5:35:3F:BC',
     'ESP32_GATEWAY_1',
     'beacon.backup@aurora.local',
     '{
@@ -114,7 +114,7 @@ mesh_nodes AS (
     'Aurora Gateway Node',
     '$2b$10$LlSc/VBmR0SPwH/oeFkq2ejdEaRu8eJRWq9xngonwqfvtBAZgO.di',
     'gateway',
-    'AA:BB:CC:DD:EE:04',
+    'C0:49:EF:D0:50:98',
     NULL,
     'beacon.gateway@aurora.local',
     '{
