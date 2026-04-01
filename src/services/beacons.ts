@@ -108,7 +108,7 @@ function toStatusSnapshot(beacon: BeaconDevice): BeaconStatusSnapshot {
     last_heartbeat_at: beacon.last_heartbeat_at,
     last_temperature_c: beacon.last_temperature_c,
     last_smoke_level: beacon.last_smoke_level,
-    is_online,
+    is_online: isOnline,
   };
 }
 
