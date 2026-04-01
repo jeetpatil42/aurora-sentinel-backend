@@ -15,7 +15,7 @@ export function setupSocketHandlers(io: Server): void {
       const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
 
       if (!token) {
-        console.error('Socket auth failed: No token provided');
+        console.warn('Socket auth rejected: no token provided');
         return next(new Error('Authentication required'));
       }
 
@@ -23,7 +23,7 @@ export function setupSocketHandlers(io: Server): void {
       try {
         payload = verifyAccessToken(token);
       } catch (tokenError: any) {
-        console.error('Socket auth failed: Token verification error', tokenError.message);
+        console.warn('Socket auth rejected: token verification error', tokenError.message);
         return next(new Error('Invalid or expired token'));
       }
 
@@ -31,17 +31,17 @@ export function setupSocketHandlers(io: Server): void {
       try {
         user = await getUserById(payload.userId);
       } catch (userError: any) {
-        console.error('Socket auth failed: User lookup error', userError.message);
+        console.error('Socket auth failed: user lookup error', userError.message);
         return next(new Error('User lookup failed'));
       }
 
       if (!user) {
-        console.error('Socket auth failed: User not found', payload.userId);
+        console.warn('Socket auth rejected: user not found', payload.userId);
         return next(new Error('User not found'));
       }
 
       if (user.role === 'security' && !(user as any).security_approved) {
-        console.error('Socket auth failed: Security account pending admin approval', payload.userId);
+        console.warn('Socket auth rejected: security account pending admin approval', payload.userId);
         return next(new Error('Security account pending admin approval'));
       }
 
@@ -50,7 +50,7 @@ export function setupSocketHandlers(io: Server): void {
 
       next();
     } catch (error: any) {
-      console.error('Socket auth failed: Unexpected error', error.message || error);
+      console.error('Socket auth failed: unexpected error', error.message || error);
       next(new Error('Authentication failed'));
     }
   });
