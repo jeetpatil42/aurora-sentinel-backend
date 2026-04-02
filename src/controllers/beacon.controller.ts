@@ -2,7 +2,14 @@ import { Response } from 'express';
 import { BeaconRequest } from '../middlewares/beaconAuth';
 import { createSOSEvent, createRiskSnapshot, getSOSEventById, logSOSEvent } from '../services/sos';
 import { supabaseAdmin } from '../db/supabaseAdmin';
-import { BeaconDevice, getBeaconById, listBeaconStatuses, recordBeaconHeartbeat } from '../services/beacons';
+import {
+  BeaconDevice,
+  getBeaconById,
+  getBeaconManualCheckInstruction,
+  listBeaconStatuses,
+  recordBeaconHeartbeat,
+  requestBeaconManualCheck,
+} from '../services/beacons';
 import { AuthRequest } from '../middlewares/auth';
 
 async function resolveUserDisplayByUserId(userId: string): Promise<{ email?: string; name?: string }> {
@@ -222,5 +229,51 @@ export const getBeaconStatuses = async (req: AuthRequest, res: Response): Promis
     res.status(200).json(statuses);
   } catch (error: any) {
     res.status(500).json({ error: error?.message || 'Failed to load beacon statuses' });
+  }
+};
+
+export const requestManualCheck = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user || req.user.role !== 'security') {
+      res.status(403).json({ error: 'Insufficient permissions' });
+      return;
+    }
+
+    const beaconId = String(req.params.beaconId || '').trim();
+    const snapshot = await requestBeaconManualCheck(beaconId);
+
+    if (!snapshot) {
+      res.status(404).json({ error: 'Beacon not found' });
+      return;
+    }
+
+    const io = req.io;
+    if (io) {
+      io.to('security_room').emit('beacon:status', snapshot);
+    }
+
+    res.status(200).json(snapshot);
+  } catch (error: any) {
+    res.status(400).json({ error: error?.message || 'Failed to request manual beacon check' });
+  }
+};
+
+export const getManualCheckInstruction = async (req: BeaconRequest, res: Response): Promise<void> => {
+  try {
+    const beacon = req.beacon;
+    if (!beacon) {
+      res.status(401).json({ error: 'Beacon authentication required' });
+      return;
+    }
+
+    const instruction = await getBeaconManualCheckInstruction(beacon.id);
+    if (!instruction) {
+      res.status(404).json({ error: 'Beacon not found' });
+      return;
+    }
+
+    res.status(200).json(instruction);
+  } catch (error: any) {
+    res.status(400).json({ error: error?.message || 'Failed to load manual check instruction' });
   }
 };

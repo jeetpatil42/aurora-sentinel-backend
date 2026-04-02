@@ -24,6 +24,8 @@ export interface BeaconDevice {
   last_mode: 'wifi' | 'esp_now_fallback' | 'offline';
   last_temperature_c: number | null;
   last_smoke_level: number | null;
+  manual_check_requested_at: string | null;
+  manual_check_responded_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -42,6 +44,9 @@ export interface BeaconStatusSnapshot {
   last_temperature_c: number | null;
   last_smoke_level: number | null;
   is_online: boolean;
+  manual_check_pending: boolean;
+  manual_check_requested_at: string | null;
+  manual_check_responded_at: string | null;
 }
 
 const HEARTBEAT_TIMEOUT_MS = 60_000;
@@ -94,6 +99,11 @@ export async function touchBeacon(beaconId: string): Promise<void> {
 function toStatusSnapshot(beacon: BeaconDevice): BeaconStatusSnapshot {
   const referenceTime = beacon.last_heartbeat_at || beacon.last_seen_at;
   const isOnline = !!referenceTime && Date.now() - new Date(referenceTime).getTime() <= HEARTBEAT_TIMEOUT_MS;
+  const manualCheckPending = !!(
+    beacon.manual_check_requested_at &&
+    (!beacon.manual_check_responded_at ||
+      new Date(beacon.manual_check_requested_at).getTime() > new Date(beacon.manual_check_responded_at).getTime())
+  );
 
   return {
     id: beacon.id,
@@ -109,6 +119,9 @@ function toStatusSnapshot(beacon: BeaconDevice): BeaconStatusSnapshot {
     last_temperature_c: beacon.last_temperature_c,
     last_smoke_level: beacon.last_smoke_level,
     is_online: isOnline,
+    manual_check_pending: manualCheckPending,
+    manual_check_requested_at: beacon.manual_check_requested_at,
+    manual_check_responded_at: beacon.manual_check_responded_at,
   };
 }
 
@@ -132,6 +145,7 @@ export async function recordBeaconHeartbeat(
     last_heartbeat_at: now,
     wifi_connected: Boolean(payload.wifi_connected),
     last_mode: payload.mode || (payload.wifi_connected ? 'wifi' : 'esp_now_fallback'),
+    manual_check_responded_at: now,
   };
 
   if (typeof payload.temperature_c === 'number') {
@@ -167,4 +181,40 @@ export async function listBeaconStatuses(): Promise<BeaconStatusSnapshot[]> {
   }
 
   return (data as BeaconDevice[]).map(toStatusSnapshot);
+}
+
+export async function requestBeaconManualCheck(beaconId: string): Promise<BeaconStatusSnapshot | null> {
+  const normalizedId = String(beaconId || '').trim();
+  if (!normalizedId) {
+    return null;
+  }
+
+  const requestedAt = new Date().toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('beacons')
+    .update({ manual_check_requested_at: requestedAt })
+    .eq('id', normalizedId)
+    .select('*')
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return toStatusSnapshot(data as BeaconDevice);
+}
+
+export async function getBeaconManualCheckInstruction(
+  beaconId: string
+): Promise<{ beacon: BeaconStatusSnapshot; should_check_now: boolean } | null> {
+  const beacon = await getBeaconById(beaconId);
+  if (!beacon) {
+    return null;
+  }
+
+  const snapshot = toStatusSnapshot(beacon);
+  return {
+    beacon: snapshot,
+    should_check_now: snapshot.manual_check_pending,
+  };
 }
