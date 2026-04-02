@@ -12,6 +12,11 @@ import {
 } from '../services/beacons';
 import { AuthRequest } from '../middlewares/auth';
 
+const MAIN_BEACON_WARNING_TEMP_C = 35;
+const MAIN_BEACON_WARNING_SMOKE = 120;
+const MAIN_BEACON_WARNING_COOLDOWN_MS = 90_000;
+const lastBeaconWarningAt = new Map<string, number>();
+
 async function resolveUserDisplayByUserId(userId: string): Promise<{ email?: string; name?: string }> {
   const { data: userRow } = await supabaseAdmin
     .from('users')
@@ -210,6 +215,34 @@ export const recordHeartbeat = async (req: BeaconRequest, res: Response): Promis
     if (io) {
       io.to('security_room').emit('beacon:heartbeat', heartbeat);
       io.to('security_room').emit('beacon:status', heartbeat);
+
+      const temperature = heartbeat.last_temperature_c;
+      const smoke = heartbeat.last_smoke_level;
+      const exceedsWarningThreshold =
+        heartbeat.node_role === 'main' &&
+        typeof temperature === 'number' &&
+        typeof smoke === 'number' &&
+        temperature >= MAIN_BEACON_WARNING_TEMP_C &&
+        smoke >= MAIN_BEACON_WARNING_SMOKE;
+
+      if (exceedsWarningThreshold) {
+        const nowMs = Date.now();
+        const previousWarningAt = lastBeaconWarningAt.get(heartbeat.id) ?? 0;
+
+        if (nowMs - previousWarningAt >= MAIN_BEACON_WARNING_COOLDOWN_MS) {
+          lastBeaconWarningAt.set(heartbeat.id, nowMs);
+          io.to('security_room').emit('beacon:warning', {
+            beacon_id: heartbeat.id,
+            beacon_name: heartbeat.name,
+            node_role: heartbeat.node_role,
+            temperature_c: temperature,
+            smoke_level: smoke,
+            message: `High temp recorded at ${heartbeat.name}`,
+            recorded_at: new Date(nowMs).toISOString(),
+            location: heartbeat.location,
+          });
+        }
+      }
     }
 
     res.status(200).json(heartbeat);
