@@ -17,6 +17,41 @@ const MAIN_BEACON_WARNING_SMOKE = 120;
 const MAIN_BEACON_WARNING_COOLDOWN_MS = 90_000;
 const lastBeaconWarningAt = new Map<string, number>();
 
+function buildBeaconPopupPayload(
+  sourceBeacon: BeaconDevice,
+  ingressBeacon: BeaconDevice,
+  payload: Record<string, any>
+) {
+  const temperature =
+    typeof payload?.temperature_c === 'number'
+      ? payload.temperature_c
+      : typeof payload?.environment?.temperature_c === 'number'
+        ? payload.environment.temperature_c
+        : null;
+  const smoke =
+    typeof payload?.smoke_level === 'number'
+      ? payload.smoke_level
+      : typeof payload?.environment?.smoke_level === 'number'
+        ? payload.environment.smoke_level
+        : null;
+
+  return {
+    beacon_id: sourceBeacon.id,
+    beacon_name: sourceBeacon.name,
+    node_role: sourceBeacon.node_role,
+    ingress_beacon_id: ingressBeacon.id,
+    ingress_beacon_name: ingressBeacon.name,
+    ingress_node_role: ingressBeacon.node_role,
+    temperature_c: temperature,
+    smoke_level: smoke,
+    message: String(payload?.message || `Fire risk detected at ${sourceBeacon.name || 'Main Beacon'}`),
+    recorded_at: new Date().toISOString(),
+    location: sourceBeacon.location,
+    source: String(payload?.source || 'beacon'),
+    type: String(payload?.type || 'auto_sensor_sos'),
+  };
+}
+
 async function resolveUserDisplayByUserId(userId: string): Promise<{ email?: string; name?: string }> {
   const { data: userRow } = await supabaseAdmin
     .from('users')
@@ -188,6 +223,39 @@ export const createBeaconSOS = async (req: BeaconRequest, res: Response): Promis
     res.status(201).json(eventWithContext);
   } catch (error: any) {
     res.status(400).json({ error: error?.message || 'Failed to create beacon SOS event' });
+  }
+};
+
+export const createBeaconAutoAlert = async (req: BeaconRequest, res: Response): Promise<void> => {
+  try {
+    const ingressBeacon = req.beacon;
+    if (!ingressBeacon) {
+      res.status(401).json({ error: 'Beacon authentication required' });
+      return;
+    }
+
+    const requestedBeaconId = String((req.body as any)?.beacon_id || '').trim();
+    const sourceBeacon = await resolveSourceBeacon(ingressBeacon, requestedBeaconId);
+
+    if (!sourceBeacon) {
+      res.status(400).json({ error: 'Invalid source beacon for auto alert' });
+      return;
+    }
+
+    const popupPayload = buildBeaconPopupPayload(sourceBeacon, ingressBeacon, (req.body as any) || {});
+
+    const io = req.io;
+    if (io) {
+      io.to('security_room').emit('beacon:auto-alert', popupPayload);
+    }
+
+    res.status(202).json({
+      ok: true,
+      delivered: Boolean(io),
+      ...popupPayload,
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error?.message || 'Failed to dispatch beacon auto alert' });
   }
 };
 
