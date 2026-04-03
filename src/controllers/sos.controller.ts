@@ -5,6 +5,35 @@ import { createRiskSnapshot } from '../services/sos';
 import { supabaseAdmin } from '../db/supabaseAdmin';
 import { isPointInPolygon } from '../utils/geojson';
 
+async function generateSignedAttachmentUrls(attachments: string[]): Promise<string[]> {
+  const attachmentArray = Array.isArray(attachments) ? attachments : [];
+  if (attachmentArray.length === 0) return [];
+
+  const envBucket = (process.env.SUPABASE_STORAGE_BUCKET || process.env.SUPABASE_STORAGE_BUCKET_NAME || '').trim() || undefined;
+  const bucketCandidates = Array.from(
+    new Set([
+      envBucket,
+      'sos-attachment',
+      'sos-attachments',
+    ].filter(Boolean))
+  ) as string[];
+
+  const attachmentUrls: string[] = [];
+  for (const path of attachmentArray) {
+    for (const bucketName of bucketCandidates) {
+      const { data, error } = await supabaseAdmin.storage.from(bucketName).createSignedUrl(path, 60 * 60);
+      if (error) {
+        continue;
+      }
+      if (data?.signedUrl) {
+        attachmentUrls.push(data.signedUrl);
+        break;
+      }
+    }
+  }
+  return attachmentUrls;
+}
+
 async function resolveUserDisplayByUserId(userId: string): Promise<{ email?: string; name?: string }> {
   const { data: userRow } = await supabaseAdmin
     .from('users')
@@ -192,28 +221,30 @@ export const createSOS = async (req: AuthRequest, res: Response): Promise<void> 
     }
 
     const display = await resolveUserDisplayByUserId(event.user_id);
-    const eventWithEmail = {
+    const attachmentUrls = await generateSignedAttachmentUrls(event.attachments || []);
+    const eventWithEmailAndUrls = {
       ...event,
       email: display.email,
       name: display.name,
+      attachment_urls: attachmentUrls,
     };
 
     // Emit real-time event (handled by socket handler)
     const io = req.io;
     if (io) {
       // Emit to security room
-      io.to('security_room').emit('new_sos_alert', eventWithEmail);
-      io.to('security_room').emit('sos:created', eventWithEmail);
+      io.to('security_room').emit('new_sos_alert', eventWithEmailAndUrls);
+      io.to('security_room').emit('sos:created', eventWithEmailAndUrls);
       // Also emit to user's room
       if (req.user?.id) {
-        io.to(`user_${req.user.id}`).emit('sos:created', eventWithEmail);
+        io.to(`user_${req.user.id}`).emit('sos:created', eventWithEmailAndUrls);
       }
       console.log(`ðŸ“¡ Emitted SOS event to security_room and user_${req.user?.id}`);
     } else {
       console.warn('âš ï¸ Socket.io not available - SOS event not broadcasted');
     }
 
-    res.status(201).json(eventWithEmail);
+    res.status(201).json(eventWithEmailAndUrls);
   } catch (error: any) {
     console.error('âŒ Error creating SOS event:', error);
     res.status(400).json({ error: error.message || 'Failed to create SOS event' });
@@ -520,7 +551,16 @@ export const getSOS = async (req: AuthRequest, res: Response): Promise<void> => 
 
       const beaconMetaBySosId = await getBeaconMetaForSOSIds(events.map((e) => e.id));
 
-      const enriched = events.map((e) =>
+      // Generate signed URLs for all events with attachments
+      const eventsWithUrls = await Promise.all(events.map(async (e) => {
+        const attachmentUrls = await generateSignedAttachmentUrls(e.attachments || []);
+        return {
+          ...e,
+          attachment_urls: attachmentUrls,
+        };
+      }));
+
+      const enriched = eventsWithUrls.map((e) =>
         applyBeaconDisplay({
           ...e,
           email: emailById.get(e.user_id),
@@ -532,7 +572,7 @@ export const getSOS = async (req: AuthRequest, res: Response): Promise<void> => 
       return;
     }
 
-    console.log(`âœ… Retrieved ${events.length} SOS events`);
+    console.log(`✅ Retrieved ${events.length} SOS events`);
 
     res.json(events);
   } catch (error: any) {
@@ -563,31 +603,7 @@ export const getSOSById = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
-    const attachments = Array.isArray((event as any).attachments) ? ((event as any).attachments as string[]) : [];
-    const envBucket = (process.env.SUPABASE_STORAGE_BUCKET || process.env.SUPABASE_STORAGE_BUCKET_NAME || '').trim() || undefined;
-    const bucketCandidates = Array.from(
-      new Set([
-        envBucket,
-        'sos-attachment',
-        'sos-attachments',
-      ].filter(Boolean))
-    ) as string[];
-
-    const attachment_urls: string[] = [];
-    if (attachments.length > 0) {
-      for (const path of attachments) {
-        for (const bucketName of bucketCandidates) {
-          const { data, error } = await supabaseAdmin.storage.from(bucketName).createSignedUrl(path, 60 * 60);
-          if (error) {
-            continue;
-          }
-          if (data?.signedUrl) {
-            attachment_urls.push(data.signedUrl);
-            break;
-          }
-        }
-      }
-    }
+    const attachmentUrls = await generateSignedAttachmentUrls(event.attachments || []);
 
     const display = await resolveUserDisplayByUserId(event.user_id);
     const beaconMetaBySosId = await getBeaconMetaForSOSIds([event.id]);
@@ -596,7 +612,7 @@ export const getSOSById = async (req: AuthRequest, res: Response): Promise<void>
       ...event,
       email: display.email,
       name: display.name,
-      attachment_urls,
+      attachment_urls: attachmentUrls,
     }, beaconMetaBySosId.get(event.id)));
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -626,32 +642,7 @@ export const updateStatus = async (req: AuthRequest, res: Response): Promise<voi
 
     const event = await updateSOSStatus(id, status, req.user.id);
 
-    const attachments = Array.isArray((event as any).attachments) ? ((event as any).attachments as string[]) : [];
-    const envBucket = (process.env.SUPABASE_STORAGE_BUCKET || process.env.SUPABASE_STORAGE_BUCKET_NAME || '').trim() || undefined;
-    const bucketCandidates = Array.from(
-      new Set([
-        envBucket,
-        'sos-attachment',
-        'sos-attachments',
-      ].filter(Boolean))
-    ) as string[];
-
-    const attachment_urls: string[] = [];
-    if (attachments.length > 0) {
-      for (const path of attachments) {
-        for (const bucketName of bucketCandidates) {
-          const { data, error } = await supabaseAdmin.storage.from(bucketName).createSignedUrl(path, 60 * 60);
-          if (error) {
-            continue;
-          }
-          if (data?.signedUrl) {
-            attachment_urls.push(data.signedUrl);
-            break;
-          }
-        }
-      }
-    }
-
+    const attachmentUrls = await generateSignedAttachmentUrls(event.attachments || []);
     const display = await resolveUserDisplayByUserId(event.user_id);
 
     const beaconMetaBySosId = await getBeaconMetaForSOSIds([event.id]);
@@ -660,7 +651,7 @@ export const updateStatus = async (req: AuthRequest, res: Response): Promise<voi
       ...event,
       email: display.email,
       name: display.name,
-      attachment_urls,
+      attachment_urls: attachmentUrls,
     }, beaconMetaBySosId.get(event.id));
 
     // Emit status update (handled by socket handler)
