@@ -44,7 +44,10 @@ function buildBeaconPopupPayload(
     ingress_node_role: ingressBeacon.node_role,
     temperature_c: temperature,
     smoke_level: smoke,
-    message: String(payload?.message || `Fire risk detected at ${sourceBeacon.name || 'Main Beacon'}`),
+    message:
+      sourceBeacon.node_role === 'main'
+        ? 'High temp at main beacon detected'
+        : String(payload?.message || `Fire risk detected at ${sourceBeacon.name || 'Beacon'}`),
     recorded_at: new Date().toISOString(),
     location: sourceBeacon.location,
     source: String(payload?.source || 'beacon'),
